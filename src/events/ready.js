@@ -1,3 +1,5 @@
+const {ActivityType } = require('discord.js');
+
 module.exports = {
   name: 'clientReady',
   once: true,
@@ -7,7 +9,7 @@ module.exports = {
 
     // Set a presence/status
     client.user.setPresence({
-      activities: [{ name: '/help | discord.js' }],
+      activities: [{ name: 'The Markets 📊' , type : ActivityType.Watching }],
       status: 'online',
     });
   },

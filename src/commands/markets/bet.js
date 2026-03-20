@@ -15,7 +15,7 @@ module.exports = {
     )
     .addIntegerOption(o => o
       .setName('outcome')
-      .setDescription('Outcome number to bet on')
+      .setDescription('Outcome position (1 = first outcome, 2 = second, etc.)')
       .setRequired(true)
       .setMinValue(1)
     )
@@ -30,7 +30,7 @@ module.exports = {
     await interaction.deferReply({ flags: 64 });
 
     const marketId   = interaction.options.getInteger('market');
-    const outcomeNum = interaction.options.getInteger('outcome');
+    const outcomePos = interaction.options.getInteger('outcome');
     const amount     = interaction.options.getInteger('amount');
 
     // ─── Validate market ──────────────────────────────────────────────────────
@@ -45,12 +45,12 @@ module.exports = {
       return interaction.editReply(`❌ Market #${marketId} is **${market.status}** — betting is closed.`);
     }
 
-    // ─── Validate outcome ─────────────────────────────────────────────────────
+    // ─── Validate outcome by position ─────────────────────────────────────────
     const outcomes = db.getMarketOutcomes(marketId);
-    const outcome = outcomes.find(o => o.id === outcomeNum);
+    const outcome  = outcomes[outcomePos - 1];
     if (!outcome) {
-      const valid = outcomes.map(o => `**${o.id}** — ${o.label}`).join('\n');
-      return interaction.editReply(`❌ Invalid outcome number. Valid options:\n${valid}`);
+      const valid = outcomes.map((o, i) => `**${i + 1}** — ${o.label}`).join('\n');
+      return interaction.editReply(`❌ Invalid outcome number. This market has ${outcomes.length} outcomes:\n${valid}`);
     }
 
     // ─── Check for duplicate bet ──────────────────────────────────────────────
@@ -62,7 +62,7 @@ module.exports = {
       );
     }
 
-    // ─── Deduct coins immediately (also validates balance) ────────────────────
+    // ─── Deduct coins immediately ─────────────────────────────────────────────
     try {
       await deductCoins(interaction.guildId, interaction.user.id, amount);
     } catch (err) {
@@ -75,7 +75,7 @@ module.exports = {
       return interaction.editReply('❌ Could not reach the currency API. Please try again later.');
     }
 
-    // ─── Save bet to DB ───────────────────────────────────────────────────────
+    // ─── Save bet ─────────────────────────────────────────────────────────────
     db.placeBet({
       marketId,
       outcomeId: outcome.id,
@@ -86,13 +86,12 @@ module.exports = {
     // ─── Refresh the market embed ─────────────────────────────────────────────
     const updatedMarket = db.getMarket(marketId);
     const embed = buildMarketEmbed(updatedMarket, outcomes);
-
     if (market.message_id) {
       try {
         const channel = await interaction.client.channels.fetch(market.channel_id);
         const msg = await channel.messages.fetch(market.message_id);
         await msg.edit({ embeds: [embed] });
-      } catch { /* original message deleted — ignore */ }
+      } catch { /* original message deleted */ }
     }
 
     await interaction.editReply(

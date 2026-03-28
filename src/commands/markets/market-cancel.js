@@ -1,13 +1,13 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../../database');
 const { buildMarketEmbed } = require('../../utils/marketEmbed');
 const { addCoins } = require('../../utils/currency');
+const { requireMod } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('market-cancel')
-    .setDescription('🛠️ [Admin] Cancel a market and refund all bets')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDescription('Cancel a market and refund all bets')
     .addIntegerOption(o => o
       .setName('market')
       .setDescription('Market ID to cancel')
@@ -16,6 +16,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!await requireMod(interaction)) return;
+
     await interaction.deferReply();
 
     const marketId = interaction.options.getInteger('market');
@@ -31,7 +33,6 @@ module.exports = {
     const allBets = db.getMarketBets(marketId);
     db.cancelMarket(marketId);
 
-    // ─── Refund every bettor ──────────────────────────────────────────────────
     const refunds = [];
     const errors  = [];
 
@@ -45,15 +46,14 @@ module.exports = {
       }
     }
 
-    // ─── Update the market embed ──────────────────────────────────────────────
-    const outcomes       = db.getMarketOutcomes(marketId);
+    const outcomes        = db.getMarketOutcomes(marketId);
     const cancelledMarket = db.getMarket(marketId);
-    const embed = buildMarketEmbed(cancelledMarket, outcomes);
+    const embed           = buildMarketEmbed(cancelledMarket, outcomes);
 
     if (market.message_id) {
       try {
         const channel = await interaction.client.channels.fetch(market.channel_id);
-        const msg = await channel.messages.fetch(market.message_id);
+        const msg     = await channel.messages.fetch(market.message_id);
         await msg.edit({ embeds: [embed] });
       } catch { /* deleted */ }
     }

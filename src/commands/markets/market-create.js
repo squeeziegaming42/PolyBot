@@ -1,12 +1,12 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../../database');
 const { buildMarketEmbed } = require('../../utils/marketEmbed');
+const { requireMod } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('market-create')
-    .setDescription('🛠️ [Admin] Create a new prediction market')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDescription('Create a new prediction market')
     .addStringOption(o => o
       .setName('question')
       .setDescription('The question to bet on (e.g. "Will X win the tournament?")')
@@ -19,9 +19,10 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const question = interaction.options.getString('question');
+
+    const question    = interaction.options.getString('question');
     const rawOutcomes = interaction.options.getString('outcomes');
-    const outcomes = rawOutcomes.split(',').map(s => s.trim()).filter(Boolean);
+    const outcomes    = rawOutcomes.split(',').map(s => s.trim()).filter(Boolean);
 
     if (outcomes.length < 2) {
       return interaction.reply({ content: '❌ You need at least **2 outcomes**, separated by commas.', flags: 64 });
@@ -38,9 +39,9 @@ module.exports = {
       outcomes,
     });
 
-    const market = db.getMarket(marketId);
+    const market         = db.getMarket(marketId);
     const marketOutcomes = db.getMarketOutcomes(marketId);
-    const embed = buildMarketEmbed(market, marketOutcomes);
+    const embed          = buildMarketEmbed(market, marketOutcomes);
 
     const { resource } = await interaction.reply({ embeds: [embed], withResponse: true });
     db.setMarketMessageId(marketId, resource.message.id);

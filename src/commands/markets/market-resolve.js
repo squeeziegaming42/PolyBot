@@ -1,13 +1,13 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../../database');
 const { buildMarketEmbed } = require('../../utils/marketEmbed');
 const { addCoins } = require('../../utils/currency');
+const { requireMod } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('market-resolve')
-    .setDescription('🛠️ [Admin] Resolve a market and pay out winners')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDescription('Resolve a market and pay out winners')
     .addIntegerOption(o => o
       .setName('market')
       .setDescription('Market ID to resolve')
@@ -16,12 +16,14 @@ module.exports = {
     )
     .addIntegerOption(o => o
       .setName('outcome')
-      .setDescription('Winning outcome position (1 = first outcome, 2 = second, etc.)')
+      .setDescription('Winning outcome position (1 = first, 2 = second, etc.)')
       .setRequired(true)
       .setMinValue(1)
     ),
 
   async execute(interaction) {
+    if (!await requireMod(interaction)) return;
+
     await interaction.deferReply();
 
     const marketId   = interaction.options.getInteger('market');
@@ -34,8 +36,7 @@ module.exports = {
     if (market.status === 'resolved')  return interaction.editReply(`❌ Market #${marketId} is already resolved.`);
     if (market.status === 'cancelled') return interaction.editReply(`❌ Market #${marketId} was cancelled.`);
 
-    // Match by 1-based position within this market, not global DB id
-    const outcomes = db.getMarketOutcomes(marketId);
+    const outcomes       = db.getMarketOutcomes(marketId);
     const winningOutcome = outcomes[outcomePos - 1];
 
     if (!winningOutcome) {
@@ -50,7 +51,6 @@ module.exports = {
 
     db.resolveMarket(marketId, winningOutcome.label);
 
-    // Pay out winners
     const payouts = [];
     const errors  = [];
 
@@ -66,13 +66,13 @@ module.exports = {
       }
     }
 
-    // Update embed
     const resolvedMarket = db.getMarket(marketId);
-    const embed = buildMarketEmbed(resolvedMarket, outcomes);
+    const embed          = buildMarketEmbed(resolvedMarket, outcomes);
+
     if (market.message_id) {
       try {
         const channel = await interaction.client.channels.fetch(market.channel_id);
-        const msg = await channel.messages.fetch(market.message_id);
+        const msg     = await channel.messages.fetch(market.message_id);
         await msg.edit({ embeds: [embed] });
       } catch { /* deleted */ }
     }
